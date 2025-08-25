@@ -35,9 +35,9 @@ def main():
     args = parser.parse_args()
 
     if args.server:
-        from .server import run_server
+        import server
 
-        asyncio.run(run_server())
+        asyncio.run(server.run_server())
     elif args.startstop:
         asyncio.run(send_startstop())
 
