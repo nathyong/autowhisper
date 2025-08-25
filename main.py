@@ -55,9 +55,6 @@ class RecordingState:
         if not self.proc:
             raise RuntimeError("No recording is in progress.")
 
-        # Wait one second to flush any remaining audio data
-        await asyncio.sleep(0.5)
-
         # Terminate the process and read the audio data from stdout
         self.proc.terminate()
         _log.info(f"Stopped recording (PID {self.proc.pid})")
