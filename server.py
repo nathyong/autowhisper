@@ -139,9 +139,10 @@ async def run_server():
     """Starts the Unix domain socket server."""
     assert not os.path.exists(_SOCKET_PATH)
 
-    _log.info(f"Starting server on {_SOCKET_PATH}")
-
+    _log.info("Loading model")
     state = RecordingState(onnx_asr.load_model("nemo-parakeet-tdt-0.6b-v2"))
+
+    _log.info(f"Starting server on {_SOCKET_PATH}")
     server = await asyncio.start_unix_server(
         lambda r, w: handle_command(r, w, state), path=_SOCKET_PATH
     )
