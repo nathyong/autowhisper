@@ -51,7 +51,7 @@ class RecordingState:
         if self.proc:
             _log.info(f"Started recording with PID {self.proc.pid}")
 
-    async def stop(self) -> str:
+    async def stop(self) -> None:
         """Stops the current recording and returns the transcribed text."""
         if not self.proc:
             raise RuntimeError("No recording is in progress.")
@@ -63,26 +63,53 @@ class RecordingState:
         # Convert the raw audio data to a NumPy array
         audio_data = numpy.frombuffer(_RECORDING_PATH.read_bytes(), dtype=numpy.float32)
 
-        # Transcribe the audio
-        _log.info("Transcribing audio...")
-        result = self.model.recognize(audio_data)
-        _log.info(f"Transcription: {result}")
+        try:
+            # Skip if the audio data is too short (less than 1s at 16kHz)
+            if len(audio_data) < 16000:
+                _log.info("Audio data is too short, skipping transcription.")
+                return
 
-        # Copy the transcribed text to the clipboard
-        subprocess.run(
-            ["xclip", "-selection", "clipboard", "-i", "-t", "TEXT"],
-            input=result.encode(),
-            check=True,
-        )
+            if numpy.all(audio_data == 0):
+                subprocess.check_call(
+                    [
+                        "notify-send",
+                        "autowhisper",
+                        "[[Audio data is silent, skipping transcription.]]",
+                    ]
+                )
+                _log.info("Audio data is silent, skipping transcription.")
+                return
 
-        # Send a notification with notify-send
-        subprocess.check_call(["notify-send", "autowhisper", result])
+            # Transcribe the audio
+            _log.info("Transcribing audio...")
+            result = self.model.recognize(audio_data)
 
-        # Clean up
-        self.proc = None
-        _RECORDING_PATH.unlink()
+            if not result:
+                subprocess.check_call(
+                    [
+                        "notify-send",
+                        "autowhisper",
+                        "--urgency=critical",
+                        "Transcription failed or returned no result.",
+                    ]
+                )
+                _log.info("Transcription failed or returned no result.")
+                return
 
-        return result
+            _log.info(f"Transcription: {result}")
+
+            # Copy the transcribed text to the clipboard and notify user
+            subprocess.run(
+                ["xsel", "--clipboard", "-i"],
+                input=result.encode(),
+                check=True,
+            )
+            subprocess.check_call(["notify-send", "autowhisper", result])
+
+        finally:
+            # Clean up
+            self.proc = None
+            _RECORDING_PATH.unlink(missing_ok=True)
 
 
 async def handle_command(
