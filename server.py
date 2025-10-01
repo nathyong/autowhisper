@@ -81,6 +81,11 @@ class RecordingState:
                     _log.info("Audio data is too short, skipping transcription.")
                     return
 
+                # Skip if the audio data is too long (more than 30s at 16kHz)
+                if len(audio_data) > 30 * 16000:
+                    _log.info("Audio data is too long, skipping transcription.")
+                    return
+
                 if numpy.all(audio_data == 0):
                     subprocess.check_call(
                         [
