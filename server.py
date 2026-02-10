@@ -187,7 +187,18 @@ async def transcription_worker(
 
 async def run_server():
     """Starts the Unix domain socket server."""
-    assert not os.path.exists(_SOCKET_PATH)
+    if os.path.exists(_SOCKET_PATH):
+        # Check if another server is already listening
+        try:
+            reader, writer = await asyncio.open_unix_connection(_SOCKET_PATH)
+            writer.close()
+            await writer.wait_closed()
+            raise RuntimeError(
+                f"Another server is already running on {_SOCKET_PATH}"
+            )
+        except (ConnectionRefusedError, FileNotFoundError):
+            _log.warning(f"Removing stale socket file: {_SOCKET_PATH}")
+            os.remove(_SOCKET_PATH)
 
     _log.info("Loading model")
     model = onnx_asr.load_model("nemo-parakeet-tdt-0.6b-v3")
