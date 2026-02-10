@@ -68,8 +68,9 @@ class RecordingState:
             if not self.proc:
                 raise RuntimeError("No recording is in progress.")
 
-            # Terminate the process
+            # Terminate the process and wait for it to exit
             self.proc.terminate()
+            await self.proc.wait()
             _log.info(f"Stopped recording (PID {self.proc.pid})")
 
             try:
