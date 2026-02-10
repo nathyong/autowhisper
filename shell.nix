@@ -7,7 +7,6 @@ pkgs.stdenvNoCC.mkDerivation {
   nativeBuildInputs = [
     pkgs.uv
     pkgs.python3Packages.numpy
-    pkgs.sox
     pkgs.libnotify
   ];
 }

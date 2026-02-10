@@ -51,16 +51,15 @@ class RecordingState:
             if _RECORDING_PATH.exists():
                 _RECORDING_PATH.unlink()
 
-            command = (
-                ["rec"]
-                + ["-q"]  # Quiet mode
-                + ["-t", "raw"]  # Specify raw output format
-                + ["-c", "1"]  # Mono channel
-                + ["-b", "32"]  # 32-bit samples
-                + ["-r", "16k"]  # 16 kHz sample rate
-                + ["-e", "floating-point"]  # Floating point encoding
-                + [_RECORDING_PATH]
-            )
+            command = [
+                "pw-record",
+                "--raw",              # RAW mode (no container)
+                "--format", "f32",    # 32-bit float
+                "--rate", "16000",    # 16 kHz sample rate
+                "--channels", "1",    # Mono
+                "--latency", "10ms",  # Small buffer to minimise loss on stop
+                str(_RECORDING_PATH),
+            ]
             self.proc = await asyncio.create_subprocess_exec(*command)
             if self.proc:
                 _log.info(f"Started recording with PID {self.proc.pid}")
