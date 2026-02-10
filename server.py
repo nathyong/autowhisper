@@ -55,17 +55,19 @@ class RecordingState:
 
             command = [
                 "pw-record",
-                "--raw",              # RAW mode (no container)
-                "--format", "f32",    # 32-bit float
-                "--rate", "16000",    # 16 kHz sample rate
-                "--channels", "1",    # Mono
-                "--latency", "10ms",  # Small buffer to minimise loss on stop
-                "-",                  # Write to stdout
+                "--raw",  # RAW mode (no container)
+                "--format",
+                "f32",  # 32-bit float
+                "--rate",
+                "16000",  # 16 kHz sample rate
+                "--channels",
+                "1",  # Mono
+                "--latency",
+                "10ms",  # Small buffer to minimise loss on stop
+                "-",  # Write to stdout
             ]
             outfile = open(_RECORDING_PATH, "wb")
-            self.proc = await asyncio.create_subprocess_exec(
-                *command, stdout=outfile
-            )
+            self.proc = await asyncio.create_subprocess_exec(*command, stdout=outfile)
             outfile.close()
             if self.proc:
                 _log.info("Started recording", pid=self.proc.pid)
@@ -97,9 +99,7 @@ class RecordingState:
 
             try:
                 # Convert the raw audio data to a NumPy array
-                audio_data = numpy.frombuffer(
-                    _RECORDING_PATH.read_bytes(), dtype=numpy.float32
-                )
+                audio_data = numpy.frombuffer(_RECORDING_PATH.read_bytes(), dtype=numpy.float32)
 
                 # Skip if the audio data is too short (less than 1s at 16kHz)
                 if len(audio_data) < 16000:
@@ -210,9 +210,7 @@ async def run_server():
             reader, writer = await asyncio.open_unix_connection(_SOCKET_PATH)
             writer.close()
             await writer.wait_closed()
-            raise RuntimeError(
-                f"Another server is already running on {_SOCKET_PATH}"
-            )
+            raise RuntimeError(f"Another server is already running on {_SOCKET_PATH}")
         except (ConnectionRefusedError, FileNotFoundError):
             _log.warning(f"Removing stale socket file: {_SOCKET_PATH}")
             os.remove(_SOCKET_PATH)
@@ -228,9 +226,7 @@ async def run_server():
     state = RecordingState(transcription_queue)
 
     # Start the transcription worker
-    worker_task = asyncio.create_task(
-        transcription_worker(model, transcription_queue, executor)
-    )
+    worker_task = asyncio.create_task(transcription_worker(model, transcription_queue, executor))
 
     _log.info("Starting server", socket_path=_SOCKET_PATH)
     server = await asyncio.start_unix_server(
