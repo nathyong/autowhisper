@@ -29,6 +29,9 @@ class Recording(NamedTuple):
     audio_data: numpy.ndarray
 
 
+_MAX_RECORDING_SECONDS = 100
+
+
 @dataclasses.dataclass
 class RecordingState:
     """Holds the state of the recording process."""
@@ -36,6 +39,7 @@ class RecordingState:
     transcription_queue: asyncio.Queue[Recording]
     _lock: asyncio.Lock = dataclasses.field(default_factory=asyncio.Lock)
     proc: asyncio.subprocess.Process | None = None
+    _timeout_handle: asyncio.TimerHandle | None = None
 
     def is_recording(self) -> bool:
         """Returns True if a recording is in progress."""
@@ -67,12 +71,23 @@ class RecordingState:
             outfile.close()
             if self.proc:
                 _log.info(f"Started recording with PID {self.proc.pid}")
+                loop = asyncio.get_running_loop()
+                self._timeout_handle = loop.call_later(
+                    _MAX_RECORDING_SECONDS,
+                    lambda: asyncio.ensure_future(self.stop()),
+                )
+                _log.info(f"Recording will auto-stop after {_MAX_RECORDING_SECONDS}s")
 
     async def stop(self) -> None:
         """Stops the current recording and queues it for transcription."""
         async with self._lock:
             if not self.proc:
                 raise RuntimeError("No recording is in progress.")
+
+            # Cancel the auto-stop timer
+            if self._timeout_handle:
+                self._timeout_handle.cancel()
+                self._timeout_handle = None
 
             # Terminate the process and wait for it to exit
             self.proc.terminate()
@@ -97,11 +112,6 @@ class RecordingState:
                 # Skip if the audio data is too short (less than 1s at 16kHz)
                 if len(audio_data) < 16000:
                     _log.info("Audio data is too short, skipping transcription.")
-                    return
-
-                # Skip if the audio data is too long (more than 100s at 16kHz)
-                if len(audio_data) > 100 * 16000:
-                    _log.info("Audio data is too long, skipping transcription.")
                     return
 
                 if numpy.all(audio_data == 0):
