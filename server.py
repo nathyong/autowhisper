@@ -58,9 +58,13 @@ class RecordingState:
                 "--rate", "16000",    # 16 kHz sample rate
                 "--channels", "1",    # Mono
                 "--latency", "10ms",  # Small buffer to minimise loss on stop
-                str(_RECORDING_PATH),
+                "-",                  # Write to stdout
             ]
-            self.proc = await asyncio.create_subprocess_exec(*command)
+            outfile = open(_RECORDING_PATH, "wb")
+            self.proc = await asyncio.create_subprocess_exec(
+                *command, stdout=outfile
+            )
+            outfile.close()
             if self.proc:
                 _log.info(f"Started recording with PID {self.proc.pid}")
 
