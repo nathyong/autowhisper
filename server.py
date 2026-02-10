@@ -189,7 +189,7 @@ async def run_server():
     assert not os.path.exists(_SOCKET_PATH)
 
     _log.info("Loading model")
-    model = onnx_asr.load_model("nemo-parakeet-tdt-0.6b-v2")
+    model = onnx_asr.load_model("nemo-parakeet-tdt-0.6b-v3")
 
     # Create transcription queue and executor
     transcription_queue = asyncio.Queue[Recording]()
