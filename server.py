@@ -7,7 +7,6 @@ import dataclasses
 import logging
 import os
 from pathlib import Path
-import signal
 import subprocess
 from typing import NamedTuple
 
@@ -72,8 +71,8 @@ class RecordingState:
             if not self.proc:
                 raise RuntimeError("No recording is in progress.")
 
-            # Send SIGINT for graceful shutdown (sox flushes buffers on SIGINT, not SIGTERM)
-            self.proc.send_signal(signal.SIGINT)
+            # Terminate the process and wait for it to exit
+            self.proc.terminate()
             await self.proc.wait()
             _log.info(f"Stopped recording (PID {self.proc.pid})")
 
