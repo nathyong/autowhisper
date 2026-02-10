@@ -4,7 +4,6 @@
 import asyncio
 import concurrent.futures as cf
 import dataclasses
-import logging
 import os
 from pathlib import Path
 import subprocess
@@ -14,10 +13,12 @@ import numpy
 import onnx_asr
 import onnx_asr.adapters
 
+import logger
+
 _SOCKET_PATH = "/tmp/autowhisper.sock"
 _RECORDING_PATH = Path("/tmp/autowhisper.raw")
 
-_log = logging.getLogger(__name__)
+_log = logger.get_logger(__name__)
 
 
 class Recording(NamedTuple):
@@ -67,13 +68,16 @@ class RecordingState:
             )
             outfile.close()
             if self.proc:
-                _log.info(f"Started recording with PID {self.proc.pid}")
+                _log.info("Started recording", pid=self.proc.pid)
                 loop = asyncio.get_running_loop()
                 self._timeout_handle = loop.call_later(
                     _MAX_RECORDING_SECONDS,
                     lambda: asyncio.ensure_future(self.stop()),
                 )
-                _log.info(f"Recording will auto-stop after {_MAX_RECORDING_SECONDS}s")
+                _log.info(
+                    "Recording will auto-stop",
+                    max_recording_seconds=_MAX_RECORDING_SECONDS,
+                )
 
     async def stop(self) -> None:
         """Stops the current recording and queues it for transcription."""
@@ -89,7 +93,7 @@ class RecordingState:
             # Terminate the process and wait for it to exit
             self.proc.terminate()
             await self.proc.wait()
-            _log.info(f"Stopped recording (PID {self.proc.pid})")
+            _log.info("Stopped recording", pid=self.proc.pid)
 
             try:
                 # Convert the raw audio data to a NumPy array
@@ -100,6 +104,11 @@ class RecordingState:
                 # Skip if the audio data is too short (less than 1s at 16kHz)
                 if len(audio_data) < 16000:
                     _log.info("Audio data is too short, skipping transcription.")
+                    return
+
+                # Skip if the audio data is too long (more than 60s at 16kHz)
+                if len(audio_data) > 60 * 16000:
+                    _log.info("Audio data is too long, skipping transcription.")
                     return
 
                 if numpy.all(audio_data == 0):
@@ -137,7 +146,7 @@ async def handle_command(
             writer.write(b"STARTED\n")
         await writer.drain()
     else:
-        _log.warning(f"Received unknown command: {message}")
+        _log.warning("Received unknown command", command=message.decode())
         writer.write(b"UNKNOWN\n")
         await writer.drain()
 
@@ -160,7 +169,7 @@ async def transcription_worker(
             queued_recording = await queue.get()
             audio_data = queued_recording.audio_data
 
-            _log.info(f"Processing transcription (queue size: {queue.qsize()})")
+            _log.info("Processing transcription", queue_size=queue.qsize())
 
             # Transcribe the audio in a thread pool
             loop = asyncio.get_event_loop()
@@ -177,7 +186,7 @@ async def transcription_worker(
                 )
                 _log.info("Transcription failed or returned no result.")
             else:
-                _log.info(f"Transcription: {result}")
+                _log.info("Transcription", text=result)
 
                 # Copy the transcribed text to the clipboard and notify user
                 subprocess.run(
@@ -194,7 +203,7 @@ async def transcription_worker(
             _log.info("Transcription worker shutting down")
             break
         except Exception as e:
-            _log.error(f"Error in transcription worker: {e}")
+            _log.error("Error in transcription worker", error=str(e))
             queue.task_done()
 
 
@@ -228,7 +237,7 @@ async def run_server():
         transcription_worker(model, transcription_queue, executor)
     )
 
-    _log.info(f"Starting server on {_SOCKET_PATH}")
+    _log.info("Starting server", socket_path=_SOCKET_PATH)
     server = await asyncio.start_unix_server(
         lambda r, w: handle_command(r, w, state), path=_SOCKET_PATH
     )

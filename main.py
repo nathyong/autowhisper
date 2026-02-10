@@ -1,10 +1,11 @@
 import argparse
 import asyncio
-import logging
+
+import logger
 
 _SOCKET_PATH = "/tmp/autowhisper.sock"
 
-_log = logging.getLogger(__name__)
+_log = logger.get_logger(__name__)
 
 
 async def send_startstop():
@@ -19,7 +20,7 @@ async def send_startstop():
     await writer.drain()
 
     data = await asyncio.wait_for(reader.readline(), timeout=5)
-    _log.info(f"Server response: {data.decode().strip()}")
+    _log.info("Server response", response=data.decode().strip())
 
     writer.close()
     await writer.wait_closed()
@@ -43,5 +44,4 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     main()
