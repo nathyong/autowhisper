@@ -10,15 +10,12 @@ from pathlib import Path
 import subprocess
 from typing import NamedTuple
 
-import wave
-
 import numpy
 import onnx_asr
 import onnx_asr.adapters
 
 _SOCKET_PATH = "/tmp/autowhisper.sock"
 _RECORDING_PATH = Path("/tmp/autowhisper.raw")
-_DEBUG_WAV_PATH = Path("/tmp/autowhisper_debug.wav")
 
 _log = logging.getLogger(__name__)
 
@@ -100,15 +97,6 @@ class RecordingState:
                     _RECORDING_PATH.read_bytes(), dtype=numpy.float32
                 )
 
-                # Export a WAV copy for debugging
-                pcm16 = (audio_data * 32767).clip(-32768, 32767).astype(numpy.int16)
-                with wave.open(str(_DEBUG_WAV_PATH), "wb") as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(16000)
-                    wf.writeframes(pcm16.tobytes())
-                _log.info(f"Debug WAV written to {_DEBUG_WAV_PATH}")
-
                 # Skip if the audio data is too short (less than 1s at 16kHz)
                 if len(audio_data) < 16000:
                     _log.info("Audio data is too short, skipping transcription.")
@@ -132,7 +120,7 @@ class RecordingState:
             finally:
                 # Clean up
                 self.proc = None
-                # _RECORDING_PATH.unlink(missing_ok=True)
+                _RECORDING_PATH.unlink(missing_ok=True)
 
 
 async def handle_command(
@@ -218,7 +206,9 @@ async def run_server():
             reader, writer = await asyncio.open_unix_connection(_SOCKET_PATH)
             writer.close()
             await writer.wait_closed()
-            raise RuntimeError(f"Another server is already running on {_SOCKET_PATH}")
+            raise RuntimeError(
+                f"Another server is already running on {_SOCKET_PATH}"
+            )
         except (ConnectionRefusedError, FileNotFoundError):
             _log.warning(f"Removing stale socket file: {_SOCKET_PATH}")
             os.remove(_SOCKET_PATH)
