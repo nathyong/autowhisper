@@ -4,6 +4,7 @@
 import asyncio
 import concurrent.futures as cf
 import dataclasses
+import functools
 import os
 from pathlib import Path
 import subprocess
@@ -19,6 +20,15 @@ _SOCKET_PATH = "/tmp/autowhisper.sock"
 _RECORDING_PATH = Path("/tmp/autowhisper.raw")
 
 _log = logger.get_logger(__name__)
+
+
+def locked(method):
+    @functools.wraps(method)
+    async def wrapper(self, *args, **kwargs):
+        async with self._lock:
+            return await method(self, *args, **kwargs)
+
+    return wrapper
 
 
 class Recording(NamedTuple):
@@ -43,88 +53,88 @@ class RecordingState:
         """Returns True if a recording is in progress."""
         return self.proc is not None
 
+    @locked
     async def start(self):
         """Starts a new recording."""
-        async with self._lock:
-            if self.is_recording():
-                raise RuntimeError("Recording is already in progress.")
+        if self.is_recording():
+            raise RuntimeError("Recording is already in progress.")
 
-            # Remove any existing recording file
-            if _RECORDING_PATH.exists():
-                _RECORDING_PATH.unlink()
+        # Remove any existing recording file
+        if _RECORDING_PATH.exists():
+            _RECORDING_PATH.unlink()
 
-            command = [
-                "pw-record",
-                "--raw",  # RAW mode (no container)
-                "--format",
-                "f32",  # 32-bit float
-                "--rate",
-                "16000",  # 16 kHz sample rate
-                "--channels",
-                "1",  # Mono
-                "--latency",
-                "10ms",  # Small buffer to minimise loss on stop
-                "-",  # Write to stdout
-            ]
-            outfile = open(_RECORDING_PATH, "wb")
-            self.proc = await asyncio.create_subprocess_exec(*command, stdout=outfile)
-            outfile.close()
-            if self.proc:
-                _log.info("Started recording", pid=self.proc.pid)
-                loop = asyncio.get_running_loop()
-                self._timeout_handle = loop.call_later(
-                    _MAX_RECORDING_SECONDS,
-                    lambda: asyncio.ensure_future(self.stop()),
-                )
-                _log.info(
-                    "Recording will auto-stop",
-                    max_recording_seconds=_MAX_RECORDING_SECONDS,
-                )
+        command = [
+            "pw-record",
+            "--raw",  # RAW mode (no container)
+            "--format",
+            "f32",  # 32-bit float
+            "--rate",
+            "16000",  # 16 kHz sample rate
+            "--channels",
+            "1",  # Mono
+            "--latency",
+            "10ms",  # Small buffer to minimise loss on stop
+            "-",  # Write to stdout
+        ]
+        outfile = open(_RECORDING_PATH, "wb")
+        self.proc = await asyncio.create_subprocess_exec(*command, stdout=outfile)
+        outfile.close()
+        if self.proc:
+            _log.info("Started recording", pid=self.proc.pid)
+            loop = asyncio.get_running_loop()
+            self._timeout_handle = loop.call_later(
+                _MAX_RECORDING_SECONDS,
+                lambda: asyncio.ensure_future(self.stop()),
+            )
+            _log.info(
+                "Recording will auto-stop",
+                max_recording_seconds=_MAX_RECORDING_SECONDS,
+            )
 
+    @locked
     async def stop(self) -> None:
         """Stops the current recording and queues it for transcription."""
-        async with self._lock:
-            if not self.proc:
-                raise RuntimeError("No recording is in progress.")
+        if not self.proc:
+            raise RuntimeError("No recording is in progress.")
 
-            # Cancel the auto-stop timer
-            if self._timeout_handle:
-                self._timeout_handle.cancel()
-                self._timeout_handle = None
+        # Cancel the auto-stop timer
+        if self._timeout_handle:
+            self._timeout_handle.cancel()
+            self._timeout_handle = None
 
-            # Terminate the process and wait for it to exit
-            self.proc.terminate()
-            await self.proc.wait()
-            _log.info("Stopped recording", pid=self.proc.pid)
+        # Terminate the process and wait for it to exit
+        self.proc.terminate()
+        await self.proc.wait()
+        _log.info("Stopped recording", pid=self.proc.pid)
 
-            try:
-                # Convert the raw audio data to a NumPy array
-                audio_data = numpy.frombuffer(_RECORDING_PATH.read_bytes(), dtype=numpy.float32)
+        try:
+            # Convert the raw audio data to a NumPy array
+            audio_data = numpy.frombuffer(_RECORDING_PATH.read_bytes(), dtype=numpy.float32)
 
-                # Skip if the audio data is too short (less than 1s at 16kHz)
-                if len(audio_data) < 16000:
-                    _log.info("Audio data is too short, skipping transcription.")
-                    return
+            # Skip if the audio data is too short (less than 1s at 16kHz)
+            if len(audio_data) < 16000:
+                _log.info("Audio data is too short, skipping transcription.")
+                return
 
-                if numpy.all(audio_data == 0):
-                    subprocess.check_call(
-                        [
-                            "notify-send",
-                            "autowhisper",
-                            "[[Audio data is silent, skipping transcription.]]",
-                        ]
-                    )
-                    _log.info("Audio data is silent, skipping transcription.")
-                    return
+            if numpy.all(audio_data == 0):
+                subprocess.check_call(
+                    [
+                        "notify-send",
+                        "autowhisper",
+                        "[[Audio data is silent, skipping transcription.]]",
+                    ]
+                )
+                _log.info("Audio data is silent, skipping transcription.")
+                return
 
-                # Queue the audio for transcription
-                await self.transcription_queue.put(Recording(audio_data))
-                _log.info("Audio queued for transcription")
+            # Queue the audio for transcription
+            await self.transcription_queue.put(Recording(audio_data))
+            _log.info("Audio queued for transcription")
 
-            finally:
-                # Clean up
-                self.proc = None
-                _RECORDING_PATH.unlink(missing_ok=True)
+        finally:
+            # Clean up
+            self.proc = None
+            _RECORDING_PATH.unlink(missing_ok=True)
 
 
 async def handle_command(
