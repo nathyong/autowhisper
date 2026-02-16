@@ -8,5 +8,6 @@ pkgs.stdenvNoCC.mkDerivation {
     pkgs.uv
     pkgs.python3Packages.numpy
     pkgs.libnotify
+    pkgs.pipewire
   ];
 }
