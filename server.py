@@ -109,7 +109,6 @@ class RecordingState:
 
         try:
             # Convert the raw audio data to a NumPy array
-            audio_data = numpy.frombuffer(_RECORDING_PATH.read_bytes(), dtype=numpy.float32)
 
             # Skip if the audio data is too short (less than 1s at 16kHz)
             if len(audio_data) < 16000:
@@ -235,7 +234,9 @@ async def run_server():
     state = RecordingState(transcription_queue)
 
     # Start the transcription worker
-    worker_task = asyncio.create_task(transcription_worker(model, transcription_queue, executor))
+    worker_task = asyncio.create_task(
+        transcription_worker(model, transcription_queue, executor)
+    )
 
     _log.info("Starting server", socket_path=_SOCKET_PATH)
     server = await asyncio.start_unix_server(
