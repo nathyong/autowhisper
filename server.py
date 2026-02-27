@@ -185,8 +185,7 @@ async def transcription_worker(
                     [
                         "notify-send",
                         "autowhisper",
-                        "--urgency=critical",
-                        "Transcription failed or returned no result.",
+                        "[[Transcription failed or returned no result.]]",
                     ]
                 )
                 _log.info("Transcription failed or returned no result.")
