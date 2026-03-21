@@ -28,10 +28,12 @@ async def send_startstop():
 
 def main():
     """Parses command-line arguments and runs the appropriate mode."""
-    parser = argparse.ArgumentParser(description="IPC example with asyncio Unix sockets.")
+    parser = argparse.ArgumentParser(description="IPC client for autowhisper.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--server", action="store_true", help="Run in server mode.")
-    group.add_argument("--startstop", action="store_true", help="Start or stop recording.")
+    group.add_argument(
+        "--startstop", action="store_true", help="Start or stop recording."
+    )
 
     args = parser.parse_args()
 
