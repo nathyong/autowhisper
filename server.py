@@ -109,6 +109,9 @@ class RecordingState:
 
         try:
             # Convert the raw audio data to a NumPy array
+            audio_data = numpy.frombuffer(
+                _RECORDING_PATH.read_bytes(), dtype=numpy.float32
+            )
 
             # Skip if the audio data is too short (less than 1s at 16kHz)
             if len(audio_data) < 16000:
@@ -224,7 +227,9 @@ async def run_server():
             os.remove(_SOCKET_PATH)
 
     _log.info("Loading model")
-    model = onnx_asr.load_model("nemo-parakeet-tdt-0.6b-v3", path="./models/parakeet-tdt-0.6b-v3")
+    model = onnx_asr.load_model(
+        "nemo-parakeet-tdt-0.6b-v3", path="./models/parakeet-tdt-0.6b-v3"
+    )
 
     # Create transcription queue and executor
     transcription_queue = asyncio.Queue[Recording]()
